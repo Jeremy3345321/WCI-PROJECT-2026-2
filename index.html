@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JHS/SHS Scheduling System · SY 2025–2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css?v=38">
+<link rel="icon" type="image/png" href="favicon_io/favicon-32x32.png">
+</head>
+<body style="display: block; min-height: 100vh;">
+
+<!-- Page Loader -->
+<div id="pageLoader" class="page-loader">
+  <div class="loader-inner">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">Loading schedule data…</div>
+  </div>
+</div>
+
+<!-- Navbar -->
+<nav id="navbar">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <div class="brand-icon">
+        <img src="assets/img/logo 3.png" alt="Scheduler logo">
+      </div>
+      <div class="brand-content">
+        <div class="brand-title">Scheduler</div>
+        <div class="brand-divider"></div>
+        <div class="brand-sub">SY 2025–2026</div>
+      </div>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-view="dashboard" onclick="switchView('dashboard')">📊 Dashboard</button>
+      <button class="nav-tab" data-view="teachers"  onclick="switchView('teachers')">👤 Teachers</button>
+      <button class="nav-tab" data-view="sections"  onclick="switchView('sections')">🏫 Sections</button>
+      <button class="nav-tab" data-view="subjects"  onclick="switchView('subjects')">📚 Subjects</button>
+      <button class="nav-tab" data-view="teacherinfo" onclick="switchView('teacherinfo'); setTimeout(function(){ var d=document.getElementById('view-teacherinfo'); if(d) d.style.display='block'; }, 200)">📋 Advisory Class</button>
+    </div>
+    <div class="nav-actions">
+      <button id="themeToggle" class="btn-theme" onclick="toggleTheme()">☀ Light</button>
+      <div class="export-dropdown">
+        <button class="btn-theme" onclick="toggleExportMenu(event)">📤 Export / Print</button>
+        <div id="exportMenu" class="export-menu hidden">
+          <button onclick="toggleExcelSubmenu(event)" class="has-submenu">
+            📊 Export Excel
+            <span class="submenu-arrow">›</span>
+          </button>
+          <div id="excelSubmenu" class="export-submenu hidden">
+            <button onclick="exportAllTeachersSchedules(event)">👤 All Teachers</button>
+            <button onclick="exportAllSectionsSchedules(event)">🏫 All Sections</button>
+            <button onclick="exportDashboardData(event)">📋 Download Data</button>
+          </div>
+          <button onclick="togglePDFSubmenu(event)" class="has-submenu">
+            📄 Export PDF
+            <span class="submenu-arrow">›</span>
+          </button>
+          <div id="pdfSubmenu" class="export-submenu hidden">
+            <button onclick="exportAllTeachersPDF(event)">👤 All Teachers</button>
+            <button onclick="exportAllSectionsPDF(event)">🏫 All Sections</button>
+            <button onclick="exportDashboardDataPDF(event)">📋 Download Data</button>
+          </div>
+          <button onclick="handlePrint(event)">🖨 Print</button>
+        </div>
+      </div>
+      <button class="btn-theme" onclick="autoGenerateSchedule()" style="background:var(--green);border-color:var(--green);font-weight:700">🤖 Auto Generate</button>
+      <button class="btn-reset" onclick="resetAllSchedules()">🗑 Reset</button>
+    </div>
+  </div>
+</nav>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- ==================== DASHBOARD ==================== -->
+<div id="view-dashboard" class="view active">
+  <div class="view-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px">
+    <div style="display:flex;align-items:center;gap:20px">
+      <img src="assets/img/logo1.png" style="width:90px;height:90px;object-fit:contain;border-radius:50%;flex-shrink:0">
+      <div>
+          <h1 class="view-title">Dashboard</h1>
+          <p class="view-sub">Western Colleges, Inc. · SY <span id="displaySchoolYear">2025–2026</span></p>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn-print-section" onclick="openEditSchoolYear()">📅 Edit School Year</button>
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card blue"><div class="stat-icon">👨‍🏫</div><div><div class="stat-num" id="stat-teachers">—</div><div class="stat-label">Teachers</div></div></div>
+    <div class="stat-card green"><div class="stat-icon">🏫</div><div><div class="stat-num" id="stat-sections">—</div><div class="stat-label">Sections</div></div></div>
+    <div class="stat-card orange"><div class="stat-icon">📚</div><div><div class="stat-num" id="stat-assigned">—</div><div class="stat-label">Assigned Periods</div></div></div>
+    <div class="stat-card red"><div class="stat-icon">⚠️</div><div><div class="stat-num" id="stat-conflicts">—</div><div class="stat-label">Conflicts</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <h2>👩‍🏫 Teacher Workload</h2>
+      <input type="text" id="teacherSearch" placeholder="🔍 Search…" oninput="filterTeachers()" class="search-input">
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Teacher</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Total</th><th>Load %</th></tr></thead>
+        <tbody id="workloadBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2>🏫 Section Completion</h2></div>
+    <div id="sectionProgress" class="section-progress-grid"></div>
+  </div>
+</div>
+
+<!-- ==================== TEACHERS ==================== -->
+<div id="view-teachers" class="view" style="display:none">
+  <div class="view-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1 class="view-title">👤 Teachers</h1>
+      <p class="view-sub">Click Schedule to assign periods · Subject is chosen per slot</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <!-- View Toggle Buttons -->
+      <div style="display:flex;align-items:center;gap:8px;padding:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px">
+        <button id="teacherViewGrid" class="view-toggle-btn active" onclick="switchTeacherView('grid')" title="Grid View">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z"/>
+          </svg>
+        </button>
+        <button id="teacherViewList" class="view-toggle-btn" onclick="switchTeacherView('list')" title="List View">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+          </svg>
+        </button>
+      </div>
+      <button class="btn-add-teacher" onclick="openAddTeacher()">＋ Add Teacher</button>
+    </div>
+  </div>
+  
+  <!-- Filter Controls -->
+  <div style="padding:16px;background:var(--bg2);border-radius:8px;margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+    <div style="display:flex;gap:8px;align-items:center;flex:1;min-width:250px">
+      <span style="font-size:13px;font-weight:700;color:var(--text2)">🔍</span>
+      <input type="text" id="searchTeacher" class="form-input" placeholder="Search teacher by name..." oninput="filterTeacherGrid()" style="flex:1;padding:8px 12px;font-size:13px">
+    </div>
+    
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-size:13px;font-weight:700;color:var(--text2)">Employment:</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px">
+        <input type="checkbox" id="filterFullTime" onchange="filterTeacherGrid()" style="cursor:pointer"> Full Time
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px">
+        <input type="checkbox" id="filterPartTime" onchange="filterTeacherGrid()" style="cursor:pointer"> Part Time
+      </label>
+    </div>
+    
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-size:13px;font-weight:700;color:var(--text2)">Department:</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px">
+        <input type="checkbox" id="filterJHS" onchange="filterTeacherGrid()" style="cursor:pointer"> JHS
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px">
+        <input type="checkbox" id="filterSHS" onchange="filterTeacherGrid()" style="cursor:pointer"> SHS
+      </label>
+    </div>
+    
+    <div style="display:flex;gap:8px;align-items:center;flex:1;min-width:200px">
+      <span style="font-size:13px;font-weight:700;color:var(--text2)">Subject:</span>
+      <select id="filterSubject" class="form-input" style="flex:1;max-width:250px;padding:6px 10px;font-size:13px" onchange="filterTeacherGrid()">
+        <option value="all">All Subjects</option>
+      </select>
+    </div>
+    
+    <button class="btn-cancel" onclick="clearTeacherFilters()" style="padding:6px 12px;font-size:12px">Clear Filters</button>
+  </div>
+  
+  <div class="teacher-list-grid" id="teacherListGrid"></div>
+
+  <!-- Teacher List View -->
+  <div class="teacher-list-view" id="teacherListView">
+    <table class="teacher-list-table">
+      <thead>
+        <tr>
+          <th>Teacher</th>
+          <th>Subjects</th>
+          <th>Department</th>
+          <th>Load</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="teacherListBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Teacher Panel -->
+  <div id="teacherPanel" class="side-panel hidden">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title" id="panelTeacherName"></div>
+        <div class="panel-sub" id="panelTeacherSubject"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-print-panel" onclick="resetTeacherSchedule(currentTeacher)">🔄 Reset</button>
+        <button class="btn-print-panel" onclick="exportTeacherScheduleExcel(currentTeacher)">📊 Excel</button>
+        <button class="btn-print-panel" onclick="printTeacherSchedule(currentTeacher)">🖨 Print</button>
+        <button class="panel-close" onclick="closePanel()">✕</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="schedule-grid-wrap">
+        <table class="sched-table" id="teacherSchedTable"></table>
+      </div>
+    </div>
+  </div>
+  <div id="panelOverlay" class="panel-overlay hidden" onclick="closePanel()"></div>
+</div>
+
+<!-- ==================== SECTIONS ==================== -->
+<div id="view-sections" class="view" style="display:none">
+  <div class="view-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
+    <div>
+      <h1 class="view-title">🏫 Sections</h1>
+      <p class="view-sub">Auto-filled from teacher assignments</p>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn-add-teacher" onclick="openAddSection()" style="background:var(--green);border-color:var(--green)">＋ Add Section</button>
+        <button class="btn-print-section" id="editSectionBtn" onclick="openEditSection()" style="background:#14b8a6;border-color:#14b8a6;color:#ffffff;display:none">✏ Edit Section</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn-print-section" onclick="exportSectionScheduleExcel()" style="background:var(--bg2);border-color:var(--border);color:var(--text2)">📊 Export Excel</button>
+        <button class="btn-print-section" id="editSectionElectivesBtn" onclick="openEditSectionElectivesModal()" style="background:var(--bg2);border-color:var(--border);color:var(--text2);display:none">⚙ Edit Electives</button>
+        <button class="btn-print-section" onclick="openSectionAvailability()" style="background:var(--bg2);border-color:var(--border);color:var(--text2)">📅 Set Availability</button>
+        <button class="btn-print-section" onclick="openRoomAvailability()" style="background:var(--bg2);border-color:var(--border);color:var(--text2)">🏢 Room Availability</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grade Level Tabs -->
+  <div class="grade-level-tabs">
+    <button class="grade-tab active" data-grade="7"  onclick="switchGradeTab(7)"><span class="grade-tab-short">G7</span><span class="grade-tab-label">Grade 7</span></button>
+    <button class="grade-tab" data-grade="8"  onclick="switchGradeTab(8)"><span class="grade-tab-short">G8</span><span class="grade-tab-label">Grade 8</span></button>
+    <button class="grade-tab" data-grade="9"  onclick="switchGradeTab(9)"><span class="grade-tab-short">G9</span><span class="grade-tab-label">Grade 9</span></button>
+    <button class="grade-tab" data-grade="10" onclick="switchGradeTab(10)"><span class="grade-tab-short">G10</span><span class="grade-tab-label">Grade 10</span></button>
+    <button class="grade-tab shs" data-grade="11" onclick="switchGradeTab(11)"><span class="grade-tab-short">G11</span><span class="grade-tab-label">Grade 11 · SHS</span></button>
+    <button class="grade-tab shs" data-grade="12" onclick="switchGradeTab(12)"><span class="grade-tab-short">G12</span><span class="grade-tab-label">Grade 12 · SHS</span></button>
+  </div>
+
+  <!-- Grade 12 Curriculum Selector -->
+  <div id="g12CurriculumSelector" style="display:none;padding:12px 16px;background:var(--bg2);border-radius:8px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:20px">
+      <label style="font-weight:700;font-size:14px;color:var(--text1)">📋 Grade 12 Curriculum:</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600">
+        <input type="radio" name="g12Curriculum" value="new" onchange="switchG12Curriculum('new')" style="cursor:pointer;width:16px;height:16px">
+        <span style="color:var(--text1)">New Curriculum (Elective Subtypes)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600">
+        <input type="radio" name="g12Curriculum" value="old" checked onchange="switchG12Curriculum('old')" style="cursor:pointer;width:16px;height:16px">
+        <span style="color:var(--text1)">Old Curriculum (Strands)</span>
+      </label>
+    </div>
+  </div>
+
+  <div id="sectionPicker" class="section-picker"></div>
+
+  <div class="card">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;gap:16px">
+        <div>
+          <h2 id="sectionSchedTitle">Select a section above</h2>
+          <span id="sectionStrandBadge"></span>
+        </div>
+        <button id="printScheduleBtn" onclick="printSectionSchedule()" style="display:none;padding:10px 20px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 4px 12px rgba(102,126,234,0.4);transition:all 0.3s ease;white-space:nowrap">🖨 Print Schedule</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th class="time-col">Time Slot</th>
+          <th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th>
+        </tr></thead>
+        <tbody id="sectionSchedBody"></tbody>
+      </table>
+    </div>
+  </div>
+  
+  <!-- Conflicts Section -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header">
+      <h2>⚠️ Schedule Conflicts</h2>
+      <div id="conflictCount" style="font-size:13px;color:var(--text2)"></div>
+    </div>
+    <div id="conflictsList" style="padding:16px">
+      <div style="text-align:center;padding:20px;color:var(--text2)">
+        Select a section above to view conflicts
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SUBJECTS ==================== -->
+<div id="view-subjects" class="view" style="display:none">
+  <div class="view-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1 class="view-title">📚 Subject Management</h1>
+      <p class="view-sub">Manage subjects for JHS and SHS grades</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <!-- View Toggle Buttons -->
+      <div style="display:flex;align-items:center;gap:8px;padding:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px">
+        <button id="subjectViewTile" class="view-toggle-btn active" onclick="switchSubjectView('tile')" title="Tile View">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z"/>
+          </svg>
+        </button>
+        <button id="subjectViewList" class="view-toggle-btn" onclick="switchSubjectView('list')" title="List View">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+          </svg>
+        </button>
+      </div>
+      <button class="btn-print-section" onclick="openManageStrands()" style="background:var(--purple);border-color:var(--purple)">🎓 Manage Electives</button>
+    </div>
+  </div>
+  
+  <!-- Curriculum Filter -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="padding:16px;display:flex;align-items:center;gap:20px">
+      <label style="font-weight:700;font-size:14px;color:var(--text1)">📋 Curriculum:</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600">
+        <input type="radio" name="curriculum" value="new" checked onchange="filterByCurriculum('new')" style="cursor:pointer;width:16px;height:16px">
+        <span style="color:var(--text1)">New Curriculum</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600">
+        <input type="radio" name="curriculum" value="old" onchange="filterByCurriculum('old')" style="cursor:pointer;width:16px;height:16px">
+        <span style="color:var(--text1)">Old Curriculum</span>
+      </label>
+    </div>
+  </div>
+  
+  <!-- Content with Quick Navigation -->
+  <div style="display:flex;gap:20px;align-items:flex-start">
+    <!-- Quick Navigation (Always Visible) -->
+    <div id="quickNavigation" style="position:sticky;top:100px;flex-shrink:0;width:180px">
+      <div class="card" style="padding:16px">
+        <div style="font-size:13px;font-weight:800;color:var(--text1);letter-spacing:0.5px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--border)">QUICK NAVIGATION</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <a href="#jhsSection" onclick="scrollToSection('jhsSection');return false" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text1);font-size:13px;font-weight:600;transition:all 0.2s;cursor:pointer" onmouseover="this.style.background='var(--bg3)';this.style.borderColor='var(--green)'" onmouseout="this.style.background='var(--bg2)';this.style.borderColor='var(--border)'">
+            <span style="font-size:16px">📚</span>
+            <span>JHS</span>
+          </a>
+          <a href="#g11Container" onclick="scrollToSection('g11Container');return false" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text1);font-size:13px;font-weight:600;transition:all 0.2s;cursor:pointer" onmouseover="this.style.background='var(--bg3)';this.style.borderColor='#3b82f6'" onmouseout="this.style.background='var(--bg2)';this.style.borderColor='var(--border)'">
+            <span style="font-size:16px">📘</span>
+            <span>Grade 11</span>
+          </a>
+          <a href="#g12Container" onclick="scrollToSection('g12Container');return false" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text1);font-size:13px;font-weight:600;transition:all 0.2s;cursor:pointer" onmouseover="this.style.background='var(--bg3)';this.style.borderColor='#06b6d4'" onmouseout="this.style.background='var(--bg2)';this.style.borderColor='var(--border)'">
+            <span style="font-size:16px">📙</span>
+            <span>Grade 12</span>
+          </a>
+        </div>
+        
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <button onclick="openManageStrands()" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:600;transition:all 0.2s;cursor:pointer;width:100%;box-shadow:0 2px 8px rgba(102,126,234,0.3)" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(102,126,234,0.5)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(102,126,234,0.3)'">
+            <span style="font-size:16px">🎓</span>
+            <span>Manage Electives</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Main Content Wrapper -->
+    <div id="subjectsMainContent" style="flex:1;min-width:0">
+  
+  <!-- JHS Section Wrapper -->
+  <div id="jhsSection" style="scroll-margin-top:120px">
+    <div style="padding:16px 0;margin-bottom:16px">
+      <h2 style="font-size:24px;font-weight:700;color:var(--text1);margin:0">📚 Junior High School</h2>
+      <p style="font-size:14px;color:var(--text2);margin:4px 0 0 0">Grades 7-10 Subjects</p>
+    </div>
+  <!-- JHS Subjects - Old Curriculum (single container) -->
+  <div id="jhsOldCurriculumContainer" class="card" style="display:none">
+    <div class="card-header">
+      <h2>JHS Subjects (Grades 7-10)</h2>
+      <button class="btn-add-teacher" onclick="openAddSubject('jhs')" style="background:var(--green);border-color:var(--green)">＋ Add JHS Subject</button>
+    </div>
+    <div id="jhsSubjectsList" style="padding:16px"></div>
+  </div>
+
+  <!-- JHS Subjects - New Curriculum (three term containers) -->
+  <div id="jhsNewCurriculumContainer" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header">
+        <h2>JHS - 1st Term</h2>
+        <button class="btn-add-teacher" onclick="openAddSubject('jhs','1','jhs','1')" style="background:var(--green);border-color:var(--green)">＋ Add Subject</button>
+      </div>
+      <div id="jhsTerm1SubjectsList" style="padding:16px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>JHS - 2nd Term</h2>
+        <button class="btn-add-teacher" onclick="openAddSubject('jhs','2','jhs','2')" style="background:#10b981;border-color:#10b981">＋ Add Subject</button>
+      </div>
+      <div id="jhsTerm2SubjectsList" style="padding:16px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>JHS - 3rd Term</h2>
+        <button class="btn-add-teacher" onclick="openAddSubject('jhs','3','jhs','3')" style="background:#059669;border-color:#059669">＋ Add Subject</button>
+      </div>
+      <div id="jhsTerm3SubjectsList" style="padding:16px"></div>
+    </div>
+  </div>
+  </div>
+
+  <div id="g11Container" style="scroll-margin-top:120px">
+    <div style="padding:16px 0;margin:32px 0 16px 0">
+      <h2 style="font-size:24px;font-weight:700;color:var(--text1);margin:0">📘 Grade 11</h2>
+      <p style="font-size:14px;color:var(--text2);margin:4px 0 0 0">Senior High School - First Year</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header">
+        <h2>Grade 11 - 1st Semester</h2>
+        <button class="btn-add-teacher" onclick="openAddSubject('shs','1','11')" style="background:#1d4ed8;border-color:#1d4ed8">＋ Add Subject</button>
+      </div>
+      <div id="g11Sem1StrandFilter" style="padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">Filter Applied Subjects by Strand:</div>
+        <div class="filter-g11-sem1" style="display:flex;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem1Strand" value="all" checked onchange="filterG11Sem1ByStrand('all')" style="cursor:pointer;width:14px;height:14px"> <span>All</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem1Strand" value="ABM" onchange="filterG11Sem1ByStrand('ABM')" style="cursor:pointer;width:14px;height:14px"> <span>ABM</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem1Strand" value="STEM" onchange="filterG11Sem1ByStrand('STEM')" style="cursor:pointer;width:14px;height:14px"> <span>STEM</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem1Strand" value="TVL" onchange="filterG11Sem1ByStrand('TVL')" style="cursor:pointer;width:14px;height:14px"> <span>TVL</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem1Strand" value="HUMSS" onchange="filterG11Sem1ByStrand('HUMSS')" style="cursor:pointer;width:14px;height:14px"> <span>HUMSS</span>
+          </label>
+        </div>
+      </div>
+      <div id="g11Sem1ElectiveFilter" style="padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">Elective Type:</div>
+        <div class="filter-g11-sem1" style="display:flex;gap:12px;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem1ElectiveType" value="academic" onchange="switchG11Sem1ElectiveType('academic')" style="cursor:pointer;width:14px;height:14px"> <span>Academic</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem1ElectiveType" value="techpro" onchange="switchG11Sem1ElectiveType('techpro')" style="cursor:pointer;width:14px;height:14px"> <span>TechPro</span>
+          </label>
+        </div>
+        <div id="g11Sem1AcademicSubtypes" style="display:none;margin-left:20px;padding:8px;background:var(--bg2);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px">Academic Subtype:</div>
+          <div class="filter-g11-sem1 filter-subtype" style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Populated dynamically from database -->
+          </div>
+        </div>
+        <div id="g11Sem1TechproSubtypes" style="display:none;margin-left:20px;padding:8px;background:var(--bg2);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px">TechPro Subtype:</div>
+          <div class="filter-g11-sem1 filter-subtype" style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Populated dynamically from database -->
+          </div>
+        </div>
+      </div>
+      <div id="g11Sem1SubjectsList" style="padding:16px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Grade 11 - 2nd Semester</h2>
+        <button class="btn-add-teacher" onclick="openAddSubject('shs','2','11')" style="background:#7c3aed;border-color:#7c3aed">＋ Add Subject</button>
+      </div>
+      <div id="g11Sem2StrandFilter" style="padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">Filter Applied Subjects by Strand:</div>
+        <div class="filter-g11-sem2" style="display:flex;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem2Strand" value="all" checked onchange="filterG11Sem2ByStrand('all')" style="cursor:pointer;width:14px;height:14px"> <span>All</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem2Strand" value="ABM" onchange="filterG11Sem2ByStrand('ABM')" style="cursor:pointer;width:14px;height:14px"> <span>ABM</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem2Strand" value="STEM" onchange="filterG11Sem2ByStrand('STEM')" style="cursor:pointer;width:14px;height:14px"> <span>STEM</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem2Strand" value="TVL" onchange="filterG11Sem2ByStrand('TVL')" style="cursor:pointer;width:14px;height:14px"> <span>TVL</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem2Strand" value="HUMSS" onchange="filterG11Sem2ByStrand('HUMSS')" style="cursor:pointer;width:14px;height:14px"> <span>HUMSS</span>
+          </label>
+        </div>
+      </div>
+      <div id="g11Sem2ElectiveFilter" style="padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">Elective Type:</div>
+        <div class="filter-g11-sem2" style="display:flex;gap:12px;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem2ElectiveType" value="academic" onchange="switchG11Sem2ElectiveType('academic')" style="cursor:pointer;width:14px;height:14px"> <span>Academic</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g11Sem2ElectiveType" value="techpro" onchange="switchG11Sem2ElectiveType('techpro')" style="cursor:pointer;width:14px;height:14px"> <span>TechPro</span>
+          </label>
+        </div>
+        <div id="g11Sem2AcademicSubtypes" style="display:none;margin-left:20px;padding:8px;background:var(--bg2);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px">Academic Subtype:</div>
+          <div class="filter-g11-sem2 filter-subtype" style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Populated dynamically from database -->
+          </div>
+        </div>
+        <div id="g11Sem2TechproSubtypes" style="display:none;margin-left:20px;padding:8px;background:var(--bg2);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px">TechPro Subtype:</div>
+          <div class="filter-g11-sem2 filter-subtype" style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Populated dynamically from database -->
+          </div>
+        </div>
+      </div>
+      <div id="g11Sem2SubjectsList" style="padding:16px"></div>
+    </div>
+  </div>
+
+  <div id="g12Container" style="scroll-margin-top:120px">
+    <div style="padding:16px 0;margin:32px 0 16px 0">
+      <h2 style="font-size:24px;font-weight:700;color:var(--text1);margin:0">📙 Grade 12</h2>
+      <p style="font-size:14px;color:var(--text2);margin:4px 0 0 0">Senior High School - Second Year</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header">
+        <h2>Grade 12 - 1st Semester</h2>
+        <button class="btn-add-teacher" onclick="openAddSubject('shs','1','12')" style="background:#0891b2;border-color:#0891b2">＋ Add Subject</button>
+      </div>
+      <div id="g12Sem1ElectiveFilter" style="padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">Elective Type:</div>
+        <div class="filter-g12-sem1" style="display:flex;gap:12px;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem1ElectiveType" value="academic" onchange="switchG12Sem1ElectiveType('academic')" style="cursor:pointer;width:14px;height:14px"> <span>Academic</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem1ElectiveType" value="techpro" onchange="switchG12Sem1ElectiveType('techpro')" style="cursor:pointer;width:14px;height:14px"> <span>TechPro</span>
+          </label>
+        </div>
+        <div id="g12Sem1AcademicSubtypes" style="display:none;margin-left:20px;padding:8px;background:var(--bg2);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px">Academic Subtype:</div>
+          <div class="filter-g12-sem1 filter-subtype" style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Populated dynamically from database -->
+          </div>
+        </div>
+        <div id="g12Sem1TechproSubtypes" style="display:none;margin-left:20px;padding:8px;background:var(--bg2);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px">TechPro Subtype:</div>
+          <div class="filter-g12-sem1 filter-subtype" style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Populated dynamically from database -->
+          </div>
+        </div>
+      </div>
+      <div id="g12Sem1StrandFilter" style="padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">Filter Applied Subjects by Strand:</div>
+        <div class="filter-g12-sem1" style="display:flex;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem1Strand" value="all" checked onchange="filterG12Sem1ByStrand('all')" style="cursor:pointer;width:14px;height:14px"> <span>All</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem1Strand" value="ABM" onchange="filterG12Sem1ByStrand('ABM')" style="cursor:pointer;width:14px;height:14px"> <span>ABM</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem1Strand" value="STEM" onchange="filterG12Sem1ByStrand('STEM')" style="cursor:pointer;width:14px;height:14px"> <span>STEM</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem1Strand" value="TVL" onchange="filterG12Sem1ByStrand('TVL')" style="cursor:pointer;width:14px;height:14px"> <span>TVL</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem1Strand" value="HUMSS" onchange="filterG12Sem1ByStrand('HUMSS')" style="cursor:pointer;width:14px;height:14px"> <span>HUMSS</span>
+          </label>
+        </div>
+      </div>
+      <div id="g12Sem1SubjectsList" style="padding:16px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Grade 12 - 2nd Semester</h2>
+        <button class="btn-add-teacher" onclick="openAddSubject('shs','2','12')" style="background:#db2777;border-color:#db2777">＋ Add Subject</button>
+      </div>
+      <div id="g12Sem2ElectiveFilter" style="padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">Elective Type:</div>
+        <div class="filter-g12-sem2" style="display:flex;gap:12px;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem2ElectiveType" value="academic" onchange="switchG12Sem2ElectiveType('academic')" style="cursor:pointer;width:14px;height:14px"> <span>Academic</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem2ElectiveType" value="techpro" onchange="switchG12Sem2ElectiveType('techpro')" style="cursor:pointer;width:14px;height:14px"> <span>TechPro</span>
+          </label>
+        </div>
+        <div id="g12Sem2AcademicSubtypes" style="display:none;margin-left:20px;padding:8px;background:var(--bg2);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px">Academic Subtype:</div>
+          <div class="filter-g12-sem2 filter-subtype" style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Populated dynamically from database -->
+          </div>
+        </div>
+        <div id="g12Sem2TechproSubtypes" style="display:none;margin-left:20px;padding:8px;background:var(--bg2);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px">TechPro Subtype:</div>
+          <div class="filter-g12-sem2 filter-subtype" style="display:flex;gap:8px;flex-wrap:wrap">
+            <!-- Populated dynamically from database -->
+          </div>
+        </div>
+      </div>
+      <div id="g12Sem2StrandFilter" style="padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:none">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">Filter Applied Subjects by Strand:</div>
+        <div class="filter-g12-sem2" style="display:flex;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem2Strand" value="all" checked onchange="filterG12Sem2ByStrand('all')" style="cursor:pointer;width:14px;height:14px"> <span>All</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem2Strand" value="ABM" onchange="filterG12Sem2ByStrand('ABM')" style="cursor:pointer;width:14px;height:14px"> <span>ABM</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem2Strand" value="STEM" onchange="filterG12Sem2ByStrand('STEM')" style="cursor:pointer;width:14px;height:14px"> <span>STEM</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem2Strand" value="TVL" onchange="filterG12Sem2ByStrand('TVL')" style="cursor:pointer;width:14px;height:14px"> <span>TVL</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="g12Sem2Strand" value="HUMSS" onchange="filterG12Sem2ByStrand('HUMSS')" style="cursor:pointer;width:14px;height:14px"> <span>HUMSS</span>
+          </label>
+        </div>
+      </div>
+      <div id="g12Sem2SubjectsList" style="padding:16px"></div>
+    </div>
+    </div><!-- Close inner grid -->
+  </div><!-- Close g12Container -->
+  </div><!-- Close subjectsMainContent -->
+  </div><!-- Close flex container -->
+</div><!-- Close view-subjects -->
+</div><!-- Fix unclosed wrapper -->
+
+
+<!-- ==================== TEACHER INFO ==================== -->
+<div id="view-teacherinfo" style="display:none; max-width:1400px; margin:0 auto; padding:80px 20px 40px;">
+  <div style="margin-bottom:24px">
+    <h1 style="font-size:24px;font-weight:800;color:var(--text)">📋 Advisory Class</h1>
+    <p style="color:var(--text2);font-size:13px;margin-top:4px">Assign advisory sections to teachers</p>
+  </div>
+  <div id="advisory-content-wrapper" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px">
+      <h2 style="font-size:15px;font-weight:700">👩‍🏫 Teacher Records</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="tiEmpFilter" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:13px;font-family:inherit" onchange="filterTeacherInfo()">
+          <option value="all">All Types</option>
+          <option value="full-time">Full Time</option>
+          <option value="part-time">Part Time</option>
+        </select>
+        <input type="text" id="teacherInfoSearch" placeholder="🔍 Search teacher…" oninput="filterTeacherInfo()" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:8px;font-size:13px;font-family:inherit;width:200px">
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:var(--bg3)">
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:1px solid var(--border)">Teacher</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:1px solid var(--border)">Subjects</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:1px solid var(--border)">Advisory Section</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:1px solid var(--border)">Room</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:1px solid var(--border)">Total Periods / Week</th>
+          </tr>
+        </thead>
+        <tbody id="teacherInfoBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<script src="assets/js/data.js?v=30"></script>
+<script src="assets/js/app.js?v=99"></script>
+<!-- Edit Section Elective Subtypes Modal -->
+<div id="editSectionElectivesModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width: 900px; max-height: 90vh; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">⚙ Edit Grade 11 Section Electives</div>
+        <div class="modal-sub">Manage which elective subtypes each section offers</div>
+      </div>
+      <button class="btn-close-modal" onclick="closeEditSectionElectivesModal()">✕</button>
+    </div>
+    <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 20px;">
+      <div id="editSectionElectivesContent"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeEditSectionElectivesModal()">Close</button>
+      <button class="btn-confirm" onclick="saveSectionElectiveSubtypes()">💾 Save All Changes</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

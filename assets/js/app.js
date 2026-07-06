@@ -11472,5 +11472,3 @@ function toggleScopeOptions(prefix) {
 const togglePDFScopeOptions = () => toggleScopeOptions('pdf');
 const toggleExcelScopeOptions = () => toggleScopeOptions('excel');
 
-
-

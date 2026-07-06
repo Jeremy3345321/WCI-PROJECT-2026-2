@@ -9,6 +9,9 @@ let currentTeacher       = null;
 let currentSection       = null;
 let currentGrade         = 7;
 
+// Ensure global subject cache is always defined for delete workflows
+window.subjectsCache = window.subjectsCache || { jhs: [], g11Sem1: [], g11Sem2: [], g12Sem1: [], g12Sem2: [] };
+
 // School Year for printables
 let schoolYear = localStorage.getItem('schoolYear') || '2025–2026';
 
@@ -1085,7 +1088,9 @@ async function loadScheduleFromDB() {
 }
  
 async function loadTeachersFromDB() {
+    console.log('loadTeachersFromDB: calling', API.teachers);
     const data = await apiFetch(API.teachers);
+    console.log('loadTeachersFromDB result:', data);
     if (data?.success) {
         teachersCache = data.data.map(t => {
             const rawSubjects = t.subjects;
@@ -1108,9 +1113,19 @@ async function loadTeachersFromDB() {
 }
  
 async function loadSectionsFromDB() {
+    console.log('loadSectionsFromDB: calling', API.sections);
     const data = await apiFetch(API.sections);
+    console.log('loadSectionsFromDB result:', data);
     if (data?.success) {
-        SECTIONS = data.data.map(dbSectionToLocal);
+        const rawSections = Array.isArray(data.data) ? data.data : (Array.isArray(data.sections) ? data.sections : []);
+        if (!Array.isArray(rawSections)) {
+            console.warn('loadSectionsFromDB: expected array in data.data or data.sections, got', rawSections);
+            return;
+        }
+        SECTIONS = rawSections.map(dbSectionToLocal);
+        console.log('loadSectionsFromDB updated SECTIONS:', SECTIONS);
+    } else {
+        console.warn('loadSectionsFromDB did not receive success response:', data);
     }
 }
  
@@ -1565,7 +1580,6 @@ async function renderTeacherGrid(list) {
                 <button class="btn-open-sched"     onclick="openTeacherPanel('${t.id}')">📅 Schedule</button>
                 <button class="btn-print-teacher"  onclick="printTeacherSchedule('${t.id}')">🖨 Print</button>
                 <button class="btn-edit-teacher"   onclick="openEditTeacher('${t.id}')">✏ Edit</button>
-                <button class="btn-remove-teacher" onclick="removeTeacher('${t.id}','${t.name.replace(/'/g,"\\'")}')">✕</button>
             </div>
         </div>`;
     }).join('');
@@ -6850,10 +6864,9 @@ ${wcHeader()}
 // ============================================================
 
 async function loadSubjectsFromDB() {
-    // Initialize cache if not defined
-    if (typeof subjectsCache === 'undefined') {
-        window.subjectsCache = { jhs: [], g11Sem1: [], g11Sem2: [], g12Sem1: [], g12Sem2: [] };
-    }
+    // Initialize cache explicitly on window
+    window.subjectsCache = window.subjectsCache || { jhs: [], g11Sem1: [], g11Sem2: [], g12Sem1: [], g12Sem2: [] };
+    console.log('loadSubjectsFromDB start window.subjectsCache:', window.subjectsCache);
     
     if (!API || !API.subjects) {
         console.error('API.subjects is not defined');
@@ -6861,20 +6874,91 @@ async function loadSubjectsFromDB() {
     }
     
     const curriculum = window.currentCurriculum || 'new';
-    console.log('Loading subjects from:', API.subjects, 'curriculum:', curriculum);
+    console.groupCollapsed('loadSubjectsFromDB');
+    console.log('calling', API.subjects, 'curriculum:', curriculum);
     const data = await apiFetch(API.subjects + '?curriculum=' + curriculum);
-    console.log('Subjects data received:', data);
+    console.log('result:', data);
     
     if (data?.success) {
-        subjectsCache.jhs = data.jhs || [];
-        subjectsCache.g11Sem1 = data.g11Sem1 || [];
-        subjectsCache.g11Sem2 = data.g11Sem2 || [];
-        subjectsCache.g12Sem1 = data.g12Sem1 || [];
-        subjectsCache.g12Sem2 = data.g12Sem2 || [];
-        console.log('Subjects cache updated:', subjectsCache);
+        const normalizeSubject = s => {
+            if (!s || typeof s !== 'object') return s;
+            s.category = String(s.category || '').trim().toLowerCase() || 'core';
+            if (typeof s.name === 'string') s.name = s.name.trim();
+
+            if (s.type === 'jhs') {
+                let termValue = String(s.term || '').trim().toLowerCase();
+                const semesterValue = String(s.semester || '').trim().toLowerCase();
+                if ((!termValue || termValue === 'null' || termValue === 'undefined' || termValue === 'all') && semesterValue.match(/^[1-3]$/)) {
+                    termValue = semesterValue;
+                }
+                if (!termValue || termValue === 'null' || termValue === 'undefined') {
+                    termValue = 'all';
+                }
+                const digitMatch = termValue.match(/[1-3]/);
+                if (digitMatch) {
+                    s.term = digitMatch[0];
+                } else if (termValue.includes('all')) {
+                    s.term = 'all';
+                } else if (termValue.includes('first') || termValue.includes('1st')) {
+                    s.term = '1';
+                } else if (termValue.includes('second') || termValue.includes('2nd')) {
+                    s.term = '2';
+                } else if (termValue.includes('third') || termValue.includes('3rd')) {
+                    s.term = '3';
+                } else {
+                    s.term = 'all';
+                }
+            }
+
+            if (s.type === 'shs') {
+                s.semester = String(s.semester || s.term || 'both').trim().toLowerCase();
+                if (s.semester.match(/^[12]$/)) {
+                    s.semester = s.semester;
+                } else if (s.semester.includes('1')) {
+                    s.semester = '1';
+                } else if (s.semester.includes('2')) {
+                    s.semester = '2';
+                } else if (s.semester.includes('both')) {
+                    s.semester = 'both';
+                }
+            }
+
+            return s;
+        };
+
+        window.subjectsCache.jhs = (data.jhs || []).map(normalizeSubject);
+        window.subjectsCache.g11Sem1 = (data.g11Sem1 || []).map(normalizeSubject);
+        window.subjectsCache.g11Sem2 = (data.g11Sem2 || []).map(normalizeSubject);
+        window.subjectsCache.g12Sem1 = (data.g12Sem1 || []).map(normalizeSubject);
+        window.subjectsCache.g12Sem2 = (data.g12Sem2 || []).map(normalizeSubject);
+        console.log('updated window.subjectsCache counts:', {
+            jhs: window.subjectsCache.jhs.length,
+            g11Sem1: window.subjectsCache.g11Sem1.length,
+            g11Sem2: window.subjectsCache.g11Sem2.length,
+            g12Sem1: window.subjectsCache.g12Sem1.length,
+            g12Sem2: window.subjectsCache.g12Sem2.length
+        });
+        console.log('subject sample:', [
+            ...window.subjectsCache.jhs.slice(0, 3),
+            ...window.subjectsCache.g11Sem1.slice(0, 3),
+            ...window.subjectsCache.g12Sem1.slice(0, 3)
+        ].map(s => ({ id: s.id, name: s.name || s.code || '', type: s.type, grade: s.grade, semester: s.semester, category: s.category })));
     } else {
         console.error('Failed to load subjects:', data);
     }
+
+    console.log('window.subjectsCache after load:', window.subjectsCache);
+
+    if (!data?.success || !data?.jhs?.length) {
+        try {
+            const rawRes = await fetch(API.subjects + '?curriculum=' + curriculum);
+            const rawText = await rawRes.text();
+            console.warn('loadSubjectsFromDB raw fallback text:', rawText);
+        } catch (err) {
+            console.warn('loadSubjectsFromDB raw fallback fetch error:', err);
+        }
+    }
+    console.groupEnd();
 }
 
 async function populateElectiveFilters() {
@@ -7144,8 +7228,33 @@ async function renderSubjectsView() {
         if (jhsOldContainer) jhsOldContainer.style.display = 'none';
         if (jhsNewContainer) jhsNewContainer.style.display = 'grid';
         
+        const resolveJhsTerm = s => {
+            const termRaw = String(s.term || '').trim().toLowerCase();
+            const semesterRaw = String(s.semester || '').trim().toLowerCase();
+            let raw = termRaw;
+            if (!raw || raw === 'null' || raw === 'undefined' || raw === 'all') {
+                raw = semesterRaw;
+            }
+            const digitMatch = raw.match(/^[1-3]$/) || raw.match(/[1-3]/);
+            if (digitMatch) return digitMatch[0];
+            if (raw.includes('all')) return 'all';
+            if (raw.includes('first') || raw.includes('1st')) return '1';
+            if (raw.includes('second') || raw.includes('2nd')) return '2';
+            if (raw.includes('third') || raw.includes('3rd')) return '3';
+            return 'all';
+        };
+        const jhsSubjects = window.subjectsCache.jhs || [];
+        const jhsCounts = jhsSubjects.reduce((acc, s) => {
+            const termValue = resolveJhsTerm(s);
+            acc[termValue] = (acc[termValue] || 0) + 1;
+            return acc;
+        }, {});
+        console.log('renderSubjectsView JHS term counts:', jhsCounts);
         document.getElementById('jhsTerm1SubjectsList').innerHTML = renderListWithCategories(
-            (subjectsCache.jhs || []).filter(s => s.term === '1' || s.term === 'all'), 
+            jhsSubjects.filter(s => {
+                const termValue = resolveJhsTerm(s);
+                return termValue === '1' || termValue === 'all';
+            }), 
             'linear-gradient(135deg,#22c55e,#16a34a)', 
             'jhs', 
             '📚', 
@@ -7153,7 +7262,10 @@ async function renderSubjectsView() {
         );
         
         document.getElementById('jhsTerm2SubjectsList').innerHTML = renderListWithCategories(
-            (subjectsCache.jhs || []).filter(s => s.term === '2' || s.term === 'all'), 
+            jhsSubjects.filter(s => {
+                const termValue = resolveJhsTerm(s);
+                return termValue === '2' || termValue === 'all';
+            }), 
             'linear-gradient(135deg,#10b981,#059669)', 
             'jhs', 
             '📚', 
@@ -7161,7 +7273,10 @@ async function renderSubjectsView() {
         );
         
         document.getElementById('jhsTerm3SubjectsList').innerHTML = renderListWithCategories(
-            (subjectsCache.jhs || []).filter(s => s.term === '3' || s.term === 'all'), 
+            jhsSubjects.filter(s => {
+                const termValue = resolveJhsTerm(s);
+                return termValue === '3' || termValue === 'all';
+            }), 
             'linear-gradient(135deg,#059669,#047857)', 
             'jhs', 
             '📚', 
@@ -8998,6 +9113,241 @@ async function doResetSectionAvailability() {
 }
 
 function closeResetModal() { var m=document.getElementById("resetModal"); if(m) m.classList.add("hidden"); }
+
+function openDeleteModal() {
+    console.log('openDeleteModal called');
+    if (!document.getElementById('deleteModal')) {
+        ensureModal('deleteModal',
+            '<div class="modal-header">' +
+                '<h3>Delete Data</h3>' +
+                '<button class="panel-close" onclick="closeDeleteModal()">✕</button>' +
+            '</div>' +
+            '<div class="modal-body">' +
+                '<p style="color:var(--text2);font-size:13px;margin-bottom:16px">Choose a category to manage deletion.</p>' +
+                '<div style="display:flex;flex-direction:column;gap:10px">' +
+                    '<button class="btn-confirm" style="background:var(--accent);border-color:var(--accent)" onclick="console.log(\'delete modal teachers clicked\'); openDeleteCategory(\'teachers\')">👤 Teachers</button>' +
+                    '<button class="btn-confirm" style="background:var(--green);border-color:var(--green)" onclick="console.log(\'delete modal sections clicked\'); openDeleteCategory(\'sections\')">🏫 Sections</button>' +
+                    '<button class="btn-confirm" style="background:var(--orange);border-color:var(--orange)" onclick="console.log(\'delete modal subjects clicked\'); openDeleteCategory(\'subjects\')">📚 Subjects</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="modal-footer"><button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button></div>'
+        );
+    }
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeDeleteModal() { var m=document.getElementById('deleteModal'); if(m) m.classList.add('hidden'); }
+
+function escapeClickArg(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+async function openDeleteCategory(category) {
+    console.log('openDeleteCategory called for', category);
+    closeDeleteModal();
+
+    if (!['teachers', 'sections', 'subjects'].includes(category)) {
+        console.warn('openDeleteCategory invalid category', category);
+        return;
+    }
+
+    let items = [];
+    const titleMap = {
+        teachers: 'Delete Teachers',
+        sections: 'Delete Sections',
+        subjects: 'Delete Subjects'
+    };
+
+    if (category === 'teachers') {
+        await loadTeachersFromDB();
+        items = Array.isArray(teachersCache) ? teachersCache : [];
+    } else if (category === 'sections') {
+        await loadSectionsFromDB();
+        items = Array.isArray(SECTIONS) ? SECTIONS : [];
+        console.log('openDeleteCategory sections after loadSectionsFromDB:', items.length, items);
+        if (!items.length) {
+            console.warn('openDeleteCategory: no SECTIONS loaded, trying direct API fallback');
+            const direct = await apiFetch(API.sections);
+            console.log('openDeleteCategory direct sections fallback result:', direct);
+            const rawSections = Array.isArray(direct?.data) ? direct.data : (Array.isArray(direct?.sections) ? direct.sections : []);
+            if (Array.isArray(rawSections)) {
+                items = rawSections.map(dbSectionToLocal);
+                console.log('openDeleteCategory fallback loaded SECTIONS:', items.length, items);
+            }
+        }
+    } else if (category === 'subjects') {
+        console.log('openDeleteCategory subjects pre-load window.subjectsCache:', window.subjectsCache);
+        await loadSubjectsFromDB();
+        console.log('openDeleteCategory subjects post-load window.subjectsCache:', window.subjectsCache);
+        const jhsItems = (window.subjectsCache?.jhs) || [];
+        const g11Sem1Items = (window.subjectsCache?.g11Sem1) || [];
+        const g11Sem2Items = (window.subjectsCache?.g11Sem2) || [];
+        const g12Sem1Items = (window.subjectsCache?.g12Sem1) || [];
+        const g12Sem2Items = (window.subjectsCache?.g12Sem2) || [];
+        items = [
+            ...jhsItems,
+            ...g11Sem1Items,
+            ...g11Sem2Items,
+            ...g12Sem1Items,
+            ...g12Sem2Items
+        ];
+
+        if (!items.length) {
+            console.warn('openDeleteCategory: subjects cache empty, trying API fallback');
+            const curriculum = window.currentCurriculum || 'new';
+            const direct = await apiFetch(API.subjects + '?curriculum=' + curriculum);
+            console.log('openDeleteCategory subjects API fallback result:', direct);
+            if (direct?.success) {
+                window.subjectsCache.jhs = direct.jhs || [];
+                window.subjectsCache.g11Sem1 = direct.g11Sem1 || [];
+                window.subjectsCache.g11Sem2 = direct.g11Sem2 || [];
+                window.subjectsCache.g12Sem1 = direct.g12Sem1 || [];
+                window.subjectsCache.g12Sem2 = direct.g12Sem2 || [];
+                items = [
+                    ...window.subjectsCache.jhs,
+                    ...window.subjectsCache.g11Sem1,
+                    ...window.subjectsCache.g11Sem2,
+                    ...window.subjectsCache.g12Sem1,
+                    ...window.subjectsCache.g12Sem2
+                ];
+                console.log('openDeleteCategory subjects fallback counts:', {
+                    jhs: window.subjectsCache.jhs.length,
+                    g11Sem1: window.subjectsCache.g11Sem1.length,
+                    g11Sem2: window.subjectsCache.g11Sem2.length,
+                    g12Sem1: window.subjectsCache.g12Sem1.length,
+                    g12Sem2: window.subjectsCache.g12Sem2.length
+                });
+            }
+        }
+
+        console.groupCollapsed('openDeleteCategory: subjects');
+        console.log('currentCurriculum:', window.currentCurriculum || 'new');
+        console.log('subjectsCache object:', window.subjectsCache);
+        console.log('subjectsCache counts:', {
+            jhs: (window.subjectsCache?.jhs || []).length,
+            g11Sem1: (window.subjectsCache?.g11Sem1 || []).length,
+            g11Sem2: (window.subjectsCache?.g11Sem2 || []).length,
+            g12Sem1: (window.subjectsCache?.g12Sem1 || []).length,
+            g12Sem2: (window.subjectsCache?.g12Sem2 || []).length
+        });
+        console.log('total subject items:', items.length);
+        console.log('subject sample:', items.slice(0, 10).map(s => ({ id: s.id, name: s.name || s.code || '', type: s.type, grade: s.grade, semester: s.semester, category: s.category })));
+        console.groupEnd();
+    }
+
+    if (!items || !Array.isArray(items)) {
+        items = [];
+    }
+
+    const debugInfo = category === 'subjects'
+        ? `<div style="margin-bottom:14px;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:10px;font-size:12px;color:var(--text2)">` +
+            `<div style="font-weight:700;margin-bottom:6px">Debug: Subjects loaded</div>` +
+            `<div>Curriculum: ${escapeClickArg(window.currentCurriculum || 'new')}</div>` +
+            `<div>JHS: ${((window.subjectsCache?.jhs) || []).length}, G11S1: ${((window.subjectsCache?.g11Sem1) || []).length}, G11S2: ${((window.subjectsCache?.g11Sem2) || []).length}, G12S1: ${((window.subjectsCache?.g12Sem1) || []).length}, G12S2: ${((window.subjectsCache?.g12Sem2) || []).length}</div>` +
+            `<div style="margin-top:6px">Total subjects: ${items.length}</div>` +
+        `</div>`
+        : '';
+
+    console.log('openDeleteCategory items count for', category, items.length, items);
+    items = items.slice().sort((a, b) => (String(a.name || '')).localeCompare(String(b.name || '')));
+
+    const rows = items.map(item => {
+        let label = '';
+        let sublabel = '';
+        let deleteAction = '';
+
+        if (category === 'teachers') {
+            const subjects = Array.isArray(item.subjects) ? item.subjects.join(', ') : item.subject || 'No subjects';
+            label = item.name || item.id || 'Unnamed Teacher';
+            sublabel = `Subjects: ${subjects}`;
+            deleteAction = `deleteTeacherEntry('${escapeClickArg(item.id)}','${escapeClickArg(item.name)}')`;
+        }
+
+        if (category === 'sections') {
+            const strandText = item.strand ? ` · ${item.strand}` : '';
+            label = item.name || item.id || 'Unnamed Section';
+            sublabel = `Grade ${item.grade || 'N/A'}${strandText}`;
+            deleteAction = `deleteSectionEntry('${escapeClickArg(item.id)}','${escapeClickArg(item.name)}','${escapeClickArg(item.grade)}')`;
+        }
+
+        if (category === 'subjects') {
+            const gradeText = item.grade ? `Grade ${item.grade}` : '';
+            const semText = item.semester ? ` · Sem ${item.semester}` : '';
+            const typeText = item.type ? item.type.toUpperCase() : '';
+            label = item.name || 'Unnamed Subject';
+            sublabel = [typeText, gradeText + semText, item.category ? item.category.toUpperCase() : ''].filter(Boolean).join(' · ');
+            deleteAction = `deleteSubjectEntry('${escapeClickArg(item.id)}','${escapeClickArg(item.name)}','${escapeClickArg(item.type || 'shs')}')`;
+        }
+
+        return `
+            <div class="delete-list-row">
+                <div class="delete-list-text">
+                    <div class="delete-list-title">${label}</div>
+                    <div class="delete-list-meta">${sublabel}</div>
+                </div>
+                <button class="btn-delete-entry" onclick="${deleteAction}">Delete</button>
+            </div>`;
+    });
+
+    let innerHtml = '<div class="modal-header">' +
+            `<h3>${titleMap[category]}</h3>` +
+            '<button class="panel-close" onclick="closeDeleteListModal()">✕</button>' +
+        '</div>' +
+        '<div class="modal-body" style="max-height:70vh;overflow:auto;gap:14px">' +
+            debugInfo +
+            (rows.length ? rows.join('') : '<div style="color:var(--text2);font-size:14px">No records found.</div>') +
+        '</div>' +
+        '<div class="modal-footer"><button class="btn-cancel" onclick="closeDeleteListModal()">Close</button></div>';
+
+    ensureModal('deleteListModal', innerHtml);
+    document.getElementById('deleteListModal').classList.remove('hidden');
+}
+
+function closeDeleteListModal() { var m=document.getElementById('deleteListModal'); if(m) m.classList.add('hidden'); }
+
+async function deleteTeacherEntry(tid, name) {
+    console.log('deleteTeacherEntry called', tid, name);
+    if (!confirm(`Remove "${name}" and all their schedule data?`)) return;
+    const res = await apiFetch(API.teachers + '?id=' + encodeURIComponent(tid), { method: 'DELETE' });
+    console.log('deleteTeacherEntry response:', res);
+    if (res?.success) {
+        await loadTeachersFromDB();
+        showToast('✓ Teacher removed', 'success');
+        openDeleteCategory('teachers');
+    } else {
+        showToast('✗ Failed to remove teacher', 'error');
+    }
+}
+
+async function deleteSectionEntry(sid, name, grade) {
+    console.log('deleteSectionEntry called', sid, name, grade);
+    if (!confirm(`Remove section "${name}"? This will also delete all its schedule assignments.`)) return;
+    const res = await apiFetch(API.sections + '?id=' + encodeURIComponent(sid), { method: 'DELETE' });
+    console.log('deleteSectionEntry response:', res);
+    if (res?.success) {
+        await loadSectionsFromDB();
+        showToast('✓ Section removed', 'success');
+        openDeleteCategory('sections');
+    } else {
+        showToast('✗ Failed to remove section', 'error');
+    }
+}
+
+async function deleteSubjectEntry(id, name, type) {
+    console.log('deleteSubjectEntry called', id, name, type);
+    if (!confirm(`Remove "${name}"? This will affect teacher subject assignments.`)) return;
+    const res = await apiFetch(API.subjects + '?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (res?.success) {
+        console.log('deleteSubjectEntry success, reloading subjects');
+        await loadSubjectsFromDB();
+        showToast('✓ Subject removed', 'success');
+        openDeleteCategory('subjects');
+    } else {
+        console.log('deleteSubjectEntry failed response:', res);
+        showToast('✗ Failed to remove subject', 'error');
+    }
+}
 
 function resetAllSchedules() {
     if (!document.getElementById("resetModal")) {
@@ -11334,12 +11684,6 @@ function renderTeacherList(list) {
                             onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'"
                             onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
                             ✏ Edit
-                        </button>
-                        <button onclick="removeTeacher('${t.id}','${t.name.replace(/'/g,"\\'")}') " 
-                            style="padding:4px 8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);border-radius:4px;font-size:11px;cursor:pointer;transition:all 0.2s"
-                            onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
-                            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
-                            ✕
                         </button>
                     </div>
                 </td>

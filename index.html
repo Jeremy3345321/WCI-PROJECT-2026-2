@@ -43,32 +43,7 @@
     </div>
     <div class="nav-actions">
       <button id="themeToggle" class="btn-theme" onclick="toggleTheme()">☀ Light</button>
-      <div class="export-dropdown">
-        <button class="btn-theme" onclick="toggleExportMenu(event)">📤 Export / Print</button>
-        <div id="exportMenu" class="export-menu hidden">
-          <button onclick="toggleExcelSubmenu(event)" class="has-submenu">
-            📊 Export Excel
-            <span class="submenu-arrow">›</span>
-          </button>
-          <div id="excelSubmenu" class="export-submenu hidden">
-            <button onclick="exportAllTeachersSchedules(event)">👤 All Teachers</button>
-            <button onclick="exportAllSectionsSchedules(event)">🏫 All Sections</button>
-            <button onclick="exportDashboardData(event)">📋 Download Data</button>
-          </div>
-          <button onclick="togglePDFSubmenu(event)" class="has-submenu">
-            📄 Export PDF
-            <span class="submenu-arrow">›</span>
-          </button>
-          <div id="pdfSubmenu" class="export-submenu hidden">
-            <button onclick="exportAllTeachersPDF(event)">👤 All Teachers</button>
-            <button onclick="exportAllSectionsPDF(event)">🏫 All Sections</button>
-            <button onclick="exportDashboardDataPDF(event)">📋 Download Data</button>
-          </div>
-          <button onclick="handlePrint(event)">🖨 Print</button>
-        </div>
-      </div>
-      <button class="btn-theme" onclick="autoGenerateSchedule()" style="background:var(--green);border-color:var(--green);font-weight:700">🤖 Auto Generate</button>
-      <button class="btn-reset" onclick="resetAllSchedules()">🗑 Reset</button>
+      <button class="btn-reset" onclick="openDeleteModal()">🗑 Delete</button>
     </div>
   </div>
 </nav>
@@ -392,7 +367,7 @@
     <div class="card">
       <div class="card-header">
         <h2>JHS - 1st Term</h2>
-        <button class="btn-add-teacher" onclick="openAddSubject('jhs','1','jhs','1')" style="background:var(--green);border-color:var(--green)">＋ Add Subject</button>
+        <button class="btn-add-teacher" onclick="openAddSubject('jhs','1','both','1')" style="background:var(--green);border-color:var(--green)">＋ Add Subject</button>
       </div>
       <div id="jhsTerm1SubjectsList" style="padding:16px"></div>
     </div>
@@ -400,7 +375,7 @@
     <div class="card">
       <div class="card-header">
         <h2>JHS - 2nd Term</h2>
-        <button class="btn-add-teacher" onclick="openAddSubject('jhs','2','jhs','2')" style="background:#10b981;border-color:#10b981">＋ Add Subject</button>
+        <button class="btn-add-teacher" onclick="openAddSubject('jhs','2','both','2')" style="background:#10b981;border-color:#10b981">＋ Add Subject</button>
       </div>
       <div id="jhsTerm2SubjectsList" style="padding:16px"></div>
     </div>
@@ -408,7 +383,7 @@
     <div class="card">
       <div class="card-header">
         <h2>JHS - 3rd Term</h2>
-        <button class="btn-add-teacher" onclick="openAddSubject('jhs','3','jhs','3')" style="background:#059669;border-color:#059669">＋ Add Subject</button>
+        <button class="btn-add-teacher" onclick="openAddSubject('jhs','3','both','3')" style="background:#059669;border-color:#059669">＋ Add Subject</button>
       </div>
       <div id="jhsTerm3SubjectsList" style="padding:16px"></div>
     </div>

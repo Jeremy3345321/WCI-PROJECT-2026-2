@@ -253,6 +253,15 @@ body {
 .btn-theme:hover { border-color: var(--accent); color: var(--accent); }
 .btn-reset:hover  { border-color: var(--red);    color: var(--red); }
 
+button[onclick^="removeTeacher"],
+button[onclick^="removeSection"],
+button[onclick^="removeSubject"],
+button[onclick^="deleteElectiveSubtype"],
+.btn-remove-teacher,
+.sec-btn-remove {
+  display: none !important;
+}
+
 /* Export dropdown */
 .export-dropdown {
   position: relative;
@@ -1213,6 +1222,52 @@ body {
 }
 
 .btn-confirm:hover { opacity: 0.85; }
+
+.btn-delete-entry {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.btn-delete-entry:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.delete-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.delete-list-text {
+  min-width: 0;
+}
+
+.delete-list-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.delete-list-meta {
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
 
 
 /* ============================================================

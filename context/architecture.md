@@ -2,7 +2,7 @@
 
 ## Electron + PHP hybrid
 - The app is an Electron desktop shell.
-- `electron-main.js` starts a local PHP server on `localhost:8080` and loads the web UI from the app root. `php -S localhost:8080 -t .`
+- `electron-main.js` starts a local PHP server on `localhost:8080` and loads the web UI from the app root. php -S localhost:8080 -t .
 - This makes the application behave like a desktop app while the frontend still communicates with a PHP backend.
 
 ## Front-end
